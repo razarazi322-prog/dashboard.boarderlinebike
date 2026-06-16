@@ -1,1 +1,833 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borderline Bikes — Business Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --orange: #F45902;
+    --orange-light: #FFF0E8;
+    --dark: #1A1A1A;
+    --gray: #888780;
+    --blue: #185FA5;
+    --green: #3B6D11;
+    --amber: #854F0B;
+    --red: #A32D2D;
+    --border: rgba(0,0,0,0.1);
+    --bg: #F8F7F4;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-muted: #666;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  
+  /* Layout */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--dark); padding: 0; flex-shrink: 0; position: fixed; top: 0; left: 0; height: 100vh; overflow-y: auto; z-index: 100; }
+  .main { margin-left: 220px; flex: 1; }
+  
+  /* Sidebar */
+  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-logo img { height: 40px; }
+  .sidebar-logo-text { color: #fff; font-size: 15px; font-weight: 600; margin-top: 8px; }
+  .sidebar-logo-sub { color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 2px; }
+  .sidebar-section { padding: 16px 0 8px; }
+  .sidebar-label { color: rgba(255,255,255,0.35); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; padding: 0 20px 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s; font-size: 13px; border-left: 3px solid transparent; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+  .sidebar-item.active { background: rgba(244,89,2,0.15); color: var(--orange); border-left-color: var(--orange); }
+  .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); margin-top: auto; }
+  .sync-btn { width: 100%; padding: 9px; background: var(--orange); border: none; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .sync-btn:hover { background: #d94e00; }
+  .sync-btn svg { width: 14px; height: 14px; }
+  .last-sync { color: rgba(255,255,255,0.35); font-size: 10px; text-align: center; margin-top: 6px; }
+  
+  /* Header */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .header-title { font-size: 16px; font-weight: 600; }
+  .header-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .filter-select { font-size: 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; }
+  .loading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--orange); z-index: 200; transition: width 0.3s; }
+  
+  /* Content */
+  .content { padding: 24px; }
+  
+  /* Metric cards */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .metric { background: var(--surface); border-radius: 12px; padding: 16px; border: 1px solid var(--border); }
+  .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .metric-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; }
+  .metric-value.orange { color: var(--orange); }
+  .metric-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+  .metric-sub .pos { color: var(--green); }
+  .metric-sub .neg { color: var(--red); }
+  
+  /* Charts */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-grid.full { grid-template-columns: 1fr; }
+  .chart-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .card { background: var(--surface); border-radius: 12px; padding: 20px; border: 1px solid var(--border); margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .card-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 16px; }
+  .chart-wrap { position: relative; }
+  
+  /* Tables */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.04); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+  .rank { color: var(--text-muted); font-size: 11px; }
+  .yoy-pos { color: var(--green); font-size: 11px; font-weight: 500; }
+  .yoy-neg { color: var(--red); font-size: 11px; font-weight: 500; }
+  
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  
+  /* Badges */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-service { background: #E6F1FB; color: #185FA5; }
+  .badge-assembly { background: #EAF3DE; color: #3B6D11; }
+  .badge-sale { background: #FAEEDA; color: #854F0B; }
+  .badge-other { background: #F1EFE8; color: #5F5E5A; }
+  
+  /* Section header */
+  .section-header { margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .section-title { font-size: 18px; font-weight: 600; }
+  .section-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  
+  /* Filters */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-row label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .filter-row select { font-size: 12px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; }
+  
+  /* Loading */
+  .loading { display: flex; align-items: center; justify-content: center; height: 400px; flex-direction: column; gap: 12px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--orange); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Progress bar for geo */
+  .geo-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .geo-bar { height: 6px; background: var(--orange); border-radius: 3px; flex-shrink: 0; }
+  
+  /* Mobile */
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .sidebar-logo-text, .sidebar-logo-sub, .sidebar-label, .sidebar-item span, .sync-btn span, .last-sync { display: none; }
+    .sidebar-item { justify-content: center; padding: 12px; }
+    .main { margin-left: 60px; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .chart-grid.three { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-bar" class="loading-bar" style="width:0%"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-text">Borderline Bikes</div>
+      <div class="sidebar-logo-sub">Business Dashboard</div>
+    </div>
+    
+    <div class="sidebar-section">
+      <div class="sidebar-label">Analytics</div>
+      <div class="sidebar-item active" onclick="showPage('overview', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Overview</span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('revenue', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <span>Revenue</span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('categories', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Categories</span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('activity', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Activity</span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('geography', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 11.5 7.35 11.76a1 1 0 0 0 1.3 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8z"/></svg>
+        <span>Geography</span>
+      </div>
+      <div class="sidebar-item" onclick="showPage('customers', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Customers</span>
+      </div>
+    </div>
+    
+    <div style="position:absolute; bottom:0; left:0; right:0; padding:16px;">
+      <button class="sync-btn" onclick="loadData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span>Sync Data</span>
+      </button>
+      <div class="last-sync" id="last-sync">Last sync: never</div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+    <div class="header">
+      <div>
+        <div class="header-title" id="page-title">Overview</div>
+        <div class="header-sub" id="page-sub">All-time business performance</div>
+      </div>
+      <div class="header-right">
+        <select class="filter-select" id="year-filter" onchange="applyYearFilter()">
+          <option value="all">All Years</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+          <option value="2020">2020</option>
+          <option value="2019">2019</option>
+          <option value="2018">2018</option>
+          <option value="2017">2017</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="content" id="app-content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div style="color:var(--text-muted);font-size:13px;">Loading data from Google Sheets...</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const SHEET_ID = '1Gi_YH7SIcsGrsp9ZIWFqdyGZXtF0Zh6cjoGPL5nQ1AU';
+const ORANGE = '#F45902';
+const BLUE = '#185FA5';
+const GREEN = '#3B6D11';
+const AMBER = '#854F0B';
+const GRAY = '#888780';
+const RED = '#A32D2D';
+
+let ALL_DATA = [];
+let FILTERED = [];
+let currentPage = 'overview';
+let charts = {};
+
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif';
+Chart.defaults.font.size = 11;
+
+function fmt$(v) { return '$' + Math.round(v).toLocaleString(); }
+function fmtN(v) { return Math.round(v).toLocaleString(); }
+function fmtK(v) { return v >= 1000 ? '$' + (v/1000).toFixed(0) + 'K' : fmt$(v); }
+
+async function fetchSheet(tabName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&t=${Date.now()}`;
+  const r = await fetch(url);
+  const text = await r.text();
+  
+  // Detect separator: tab or comma
+  const firstLine = text.split('\n')[0];
+  const sep = firstLine.includes('\t') ? '\t' : null;
+  
+  // Use JSON endpoint instead for reliable parsing
+  const urlJson = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}&t=${Date.now()}`;
+  const r2 = await fetch(urlJson);
+  const raw = await r2.text();
+  // Strip Google's JSONP wrapper: google.visualization.Query.setResponse({...});
+  const json = JSON.parse(raw.replace(/^[^(]+\(/, '').replace(/\);?$/, ''));
+  
+  const cols = json.table.cols.map(c => c.label);
+  return json.table.rows
+    .filter(row => row && row.c && row.c[0] && row.c[0].v)
+    .map(row => {
+      const obj = {};
+      cols.forEach((col, i) => {
+        const cell = row.c && row.c[i];
+        if (!cell || cell.v === null || cell.v === undefined) {
+          obj[col] = '';
+        } else if (col === 'Date' && typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+          // Parse Google's Date(year,month,day) format
+          const parts = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+          if (parts) {
+            const mo = String(parseInt(parts[2])+1).padStart(2,'0');
+            const dy = String(parts[3]).padStart(2,'0');
+            obj[col] = `${mo}/${dy}/${parts[1]}`;
+          } else {
+            obj[col] = cell.f || String(cell.v);
+          }
+        } else {
+          obj[col] = cell.f !== undefined && cell.f !== null ? String(cell.f) : String(cell.v);
+        }
+      });
+      return obj;
+    })
+    .filter(r => r['Date'] && r['Date'].match(/\d{2}\/\d{2}\/\d{4}/));
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQ = !inQ; }
+    else if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += line[i]; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function setProgress(pct) {
+  document.getElementById('loading-bar').style.width = pct + '%';
+}
+
+async function loadData() {
+  setProgress(10);
+  document.getElementById('app-content').innerHTML = `<div class="loading"><div class="spinner"></div><div style="color:var(--text-muted);font-size:13px;">Syncing from Google Sheets...</div></div>`;
+  
+  try {
+    setProgress(40);
+    console.log('Fetching All Jobs sheet...');
+    const rows = await fetchSheet('All Jobs');
+    console.log('Fetched rows:', rows.length);
+    console.log('First row keys:', rows.length ? Object.keys(rows[0]) : 'none');
+    // Show unique categories from raw rows before filtering
+    const rawCats = [...new Set(rows.map(r => r['Category']).filter(c => c))];
+    console.log('Raw categories from sheet:', rawCats);
+    // Find rokko specifically
+    const rokkoRows = rows.filter(r => JSON.stringify(r).toLowerCase().includes('rokko'));
+    console.log('Rows containing rokko:', rokkoRows.length);
+    if(rokkoRows.length > 0) console.log('Rokko row sample:', JSON.stringify(rokkoRows[0]));
+    setProgress(80);
+    
+    ALL_DATA = rows.map(r => ({
+      date: r['Date'] ? new Date(r['Date'].replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$1-$2')) : null,
+      year: parseInt(r['Year']) || null,
+      month: r['Date'] ? new Date(r['Date']).getMonth() + 1 : null,
+      quarter: r['Date'] ? Math.ceil((new Date(r['Date']).getMonth() + 1) / 3) : null,
+      dow: r['Date'] ? new Date(r['Date']).getDay() : null,
+      name: r['Customer Name'] || '',
+      phone: r['Phone'] || '',
+      email: r['Email'] || '',
+      city: r['City'] || '',
+      state: r['State'] || '',
+      zip: r['Zip'] || '',
+      county: r['County'] || '',
+      total: parseFloat((r['Total $']||'').replace(/[$,]/g,'')) || 0,
+      payment: r['Payment'] || '',
+      category: r['Category'] || 'Other',
+      services: r['Services'] || '',
+      cancelled: r['Cancelled'] === 'Yes',
+      bikeType: r['Bike Type'] || ''
+    })).filter(r => r.date && !isNaN(r.date) && !r.cancelled && r.total > 0);
+
+    setProgress(100);
+    FILTERED = [...ALL_DATA];
+    document.getElementById('last-sync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
+    setTimeout(() => setProgress(0), 500);
+    renderPage(currentPage);
+  } catch(e) {
+    console.error('Dashboard error:', e);
+    document.getElementById('app-content').innerHTML = `<div class="loading"><div style="color:var(--red);font-size:13px;">Error: ${e.message}</div><div style="color:var(--text-muted);font-size:11px;margin-top:8px;">Open F12 console for details</div><br><button onclick="loadData()" style="padding:8px 16px;background:var(--orange);color:#fff;border:none;border-radius:8px;cursor:pointer;">Retry</button></div>`;
+    setProgress(0);
+  }
+}
+
+function applyYearFilter() {
+  const yr = document.getElementById('year-filter').value;
+  FILTERED = yr === 'all' ? [...ALL_DATA] : ALL_DATA.filter(r => r.year === parseInt(yr));
+  renderPage(currentPage);
+}
+
+function showPage(page, el) {
+  currentPage = page;
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  const titles = {
+    overview: ['Overview', 'All-time business performance'],
+    revenue: ['Revenue', 'Historical, YOY, YTD & month-over-month'],
+    categories: ['Categories', 'Service, assembly, bike sales & other'],
+    activity: ['Activity', 'Busiest days, months & quarters'],
+    geography: ['Geography', 'Jobs by zip, city, county & state'],
+    customers: ['Customers', 'Repeat, active & inactive customers']
+  };
+  document.getElementById('page-title').textContent = titles[page][0];
+  document.getElementById('page-sub').textContent = titles[page][1];
+  renderPage(page);
+}
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => { if(c) c.destroy(); });
+  charts = {};
+}
+
+function renderPage(page) {
+  destroyCharts();
+  if (!ALL_DATA.length) return;
+  const pages = { overview: renderOverview, revenue: renderRevenue, categories: renderCategories, activity: renderActivity, geography: renderGeography, customers: renderCustomers };
+  if (pages[page]) pages[page]();
+}
+
+function groupBy(data, key, valKey) {
+  const map = {};
+  data.forEach(r => {
+    const k = r[key];
+    if (!k) return;
+    if (!map[k]) map[k] = { count: 0, revenue: 0 };
+    map[k].count++;
+    map[k].revenue += r[valKey] || 0;
+  });
+  return map;
+}
+
+function makeChart(id, type, data, options) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  charts[id] = new Chart(ctx, { type, data, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, ...options } });
+  return charts[id];
+}
+
+function renderOverview() {
+  const total = FILTERED.reduce((s, r) => s + r.total, 0);
+  const jobs = FILTERED.length;
+  const avg = jobs ? total / jobs : 0;
+  const yr2026 = FILTERED.filter(r => r.year === 2026);
+  const ytd = yr2026.reduce((s, r) => s + r.total, 0);
+
+  const yoyMap = groupBy(ALL_DATA.filter(r => !r.cancelled), 'year', 'total');
+  const years = Object.keys(yoyMap).map(Number).filter(y => y >= 2017 && y <= 2026).sort();
+  const bestYr = years.reduce((b, y) => yoyMap[y].revenue > (yoyMap[b]?.revenue||0) ? y : b, years[0]);
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Business Overview</div><div class="section-desc">${fmtN(jobs)} jobs · ${fmt$(total)} total revenue</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Total revenue</div><div class="metric-value orange">${fmt$(total)}</div><div class="metric-sub">All time</div></div>
+      <div class="metric"><div class="metric-label">Total jobs</div><div class="metric-value">${fmtN(jobs)}</div><div class="metric-sub">Completed</div></div>
+      <div class="metric"><div class="metric-label">Avg job value</div><div class="metric-value">${fmt$(avg)}</div><div class="metric-sub">Per service</div></div>
+      <div class="metric"><div class="metric-label">YTD 2026</div><div class="metric-value orange">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(yr2026.length)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Best year</div><div class="metric-value">${bestYr}</div><div class="metric-sub">${fmt$(yoyMap[bestYr]?.revenue||0)}</div></div>
+      <div class="metric"><div class="metric-label">States served</div><div class="metric-value">${Object.keys(groupBy(FILTERED,'state','total')).filter(s=>s).length}</div><div class="metric-sub">NJ · NY · PA · CT</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Annual revenue</div>
+      <div class="card-sub">Year over year performance</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-yr" role="img" aria-label="Annual revenue by year"></canvas></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Revenue by category</div>
+        <div class="legend" id="cat-legend"></div>
+        <div class="chart-wrap" style="height:180px"><canvas id="c-cat" role="img" aria-label="Revenue by category donut"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Jobs by state</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="c-state" role="img" aria-label="Jobs by state"></canvas></div>
+      </div>
+    </div>`;
+
+  const yrData = years.map(y => ({ y, rev: yoyMap[y].revenue, cnt: yoyMap[y].count }));
+  makeChart('c-yr', 'bar', {
+    labels: yrData.map(d => d.y),
+    datasets: [{ data: yrData.map(d => d.rev), backgroundColor: ORANGE + 'CC', borderColor: ORANGE, borderWidth: 1 }]
+  }, { scales: { y: { ticks: { callback: v => fmtK(v) } }, x: { grid: { display: false } } } });
+
+  const catMap = groupBy(FILTERED, 'category', 'total');
+  const cats = [...new Set(FILTERED.map(r => r.category).filter(c => c))].sort();
+  const colorPalette = [BLUE, GREEN, AMBER, GRAY, ORANGE, '#8E44AD', '#16A085', '#C0392B'];
+  const colors = cats.map((_, i) => colorPalette[i % colorPalette.length]);
+  const legendEl = document.getElementById('cat-legend');
+  if(legendEl) legendEl.innerHTML = cats.map((c,i) => `<span class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${c}</span>`).join('');
+  makeChart('c-cat', 'doughnut', {
+    labels: cats,
+    datasets: [{ data: cats.map(c => catMap[c]?.revenue || 0), backgroundColor: colors, borderWidth: 0 }]
+  }, { cutout: '60%' });
+
+  const stateMap = groupBy(FILTERED, 'state', 'total');
+  const states = Object.entries(stateMap).filter(([s]) => s).sort((a,b) => b[1].count - a[1].count).slice(0, 5);
+  makeChart('c-state', 'bar', {
+    labels: states.map(([s]) => s),
+    datasets: [{ data: states.map(([,d]) => d.count), backgroundColor: [ORANGE, BLUE, GREEN, AMBER, GRAY], borderWidth: 0 }]
+  }, { indexAxis: 'y', scales: { x: { grid: { display: false } }, y: { grid: { display: false } } } });
+}
+
+function renderRevenue() {
+  const yoyMap = groupBy(ALL_DATA.filter(r => !r.cancelled && r.total > 0), 'year', 'total');
+  const years = Object.keys(yoyMap).map(Number).filter(y => y >= 2017 && y <= 2026).sort();
+  
+  const monthMap = {};
+  FILTERED.forEach(r => {
+    if (!r.year || !r.month) return;
+    const k = `${r.year}-${String(r.month).padStart(2,'0')}`;
+    if (!monthMap[k]) monthMap[k] = { revenue: 0, count: 0 };
+    monthMap[k].revenue += r.total;
+    monthMap[k].count++;
+  });
+  const months = Object.keys(monthMap).sort().slice(-24);
+
+  const totalRev = FILTERED.reduce((s,r) => s+r.total, 0);
+  const ytd = FILTERED.filter(r => r.year === 2026).reduce((s,r)=>s+r.total,0);
+  const peakYr = years.reduce((b,y) => yoyMap[y].revenue>(yoyMap[b]?.revenue||0)?y:b, years[0]);
+  const peakMoEntry = Object.entries(monthMap).sort((a,b)=>b[1].revenue-a[1].revenue)[0];
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Revenue Analysis</div><div class="section-desc">KPIs 1–5: Historical, yearly, YOY, YTD & month-over-month</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Historical total (KPI 1)</div><div class="metric-value orange">${fmt$(totalRev)}</div><div class="metric-sub">Since 2017</div></div>
+      <div class="metric"><div class="metric-label">YTD 2026 (KPI 4)</div><div class="metric-value">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(FILTERED.filter(r=>r.year===2026).length)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Best year</div><div class="metric-value">${peakYr}</div><div class="metric-sub">${fmt$(yoyMap[peakYr]?.revenue||0)}</div></div>
+      <div class="metric"><div class="metric-label">Best month</div><div class="metric-value">${peakMoEntry?peakMoEntry[0]:'—'}</div><div class="metric-sub">${peakMoEntry?fmt$(peakMoEntry[1].revenue):'—'}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Year over year revenue (KPI 2 & 3)</div>
+      <div class="card-sub">Revenue bars + job count line</div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:${ORANGE}"></span>Revenue</span>
+        <span class="legend-item"><span class="legend-dot" style="background:${BLUE};border:1px dashed"></span>Jobs</span>
+      </div>
+      <div class="chart-wrap" style="height:220px"><canvas id="c-yoy" role="img" aria-label="Year over year revenue"></canvas></div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Year</th><th>Jobs</th><th>Revenue</th><th>Avg/job</th><th>YOY %</th></tr></thead>
+          <tbody id="yoy-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Month over month (KPI 5)</div>
+      <div class="card-sub">Last 24 months of revenue</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-mom" role="img" aria-label="Monthly revenue trend"></canvas></div>
+    </div>`;
+
+  makeChart('c-yoy', 'bar', {
+    labels: years,
+    datasets: [
+      { type: 'bar', label: 'Revenue', data: years.map(y => yoyMap[y].revenue), backgroundColor: ORANGE+'BB', yAxisID: 'y' },
+      { type: 'line', label: 'Jobs', data: years.map(y => yoyMap[y].count), borderColor: BLUE, backgroundColor:'transparent', pointRadius:4, yAxisID:'y2', tension:0.3, borderDash:[4,2] }
+    ]
+  }, { scales: { y:{ ticks:{callback:v=>fmtK(v)}, position:'left', grid:{color:'rgba(0,0,0,0.05)'} }, y2:{position:'right', grid:{display:false}, ticks:{callback:v=>fmtN(v)}}, x:{grid:{display:false}} } });
+
+  const tbody = document.getElementById('yoy-tbody');
+  years.forEach((y,i) => {
+    const prev = i>0?yoyMap[years[i-1]].revenue:null;
+    const cur = yoyMap[y];
+    const yoy = prev ? ((cur.revenue-prev)/prev*100) : null;
+    tbody.innerHTML += `<tr><td><strong>${y}</strong></td><td>${fmtN(cur.count)}</td><td>${fmt$(cur.revenue)}</td><td>${fmt$(cur.revenue/cur.count)}</td><td>${yoy===null?'—':`<span class="${yoy>=0?'yoy-pos':'yoy-neg'}">${yoy>=0?'+':''}${yoy.toFixed(1)}%</span>`}</td></tr>`;
+  });
+
+  makeChart('c-mom', 'line', {
+    labels: months,
+    datasets: [{ data: months.map(m => monthMap[m]?.revenue||0), borderColor:ORANGE, backgroundColor:ORANGE+'22', fill:true, tension:0.3, pointRadius:2 }]
+  }, { scales: { y:{ticks:{callback:v=>fmtK(v)},grid:{color:'rgba(0,0,0,0.05)'}}, x:{ticks:{maxRotation:45, maxTicksLimit:12},grid:{display:false}} } });
+}
+
+function renderCategories() {
+  const catMap = groupBy(FILTERED, 'category', 'total');
+  const cats = [...new Set(FILTERED.map(r => r.category).filter(c => c))].sort();
+  const colorPalette = [BLUE, GREEN, AMBER, GRAY, ORANGE, '#8E44AD', '#16A085', '#C0392B'];
+  const colors = cats.map((_, i) => colorPalette[i % colorPalette.length]);
+  const total = FILTERED.reduce((s,r)=>s+r.total,0);
+
+  const svcMap = {};
+  FILTERED.forEach(r => {
+    r.services.split(',').forEach(s => {
+      const sv = s.trim();
+      if(!sv) return;
+      if(!svcMap[sv]) svcMap[sv] = {count:0,revenue:0};
+      svcMap[sv].count++;
+      svcMap[sv].revenue += r.total;
+    });
+  });
+  const topSvcs = Object.entries(svcMap).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
+
+  const payMap = {};
+  FILTERED.forEach(r => {
+    if(!r.payment) return;
+    if(!payMap[r.payment]) payMap[r.payment] = 0;
+    payMap[r.payment]++;
+  });
+  const pays = Object.entries(payMap).sort((a,b)=>b[1]-a[1]);
+  const totalPay = pays.reduce((s,[,c])=>s+c,0);
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Service Categories</div><div class="section-desc">KPIs 6–11: Revenue & quantity by category, top services</div></div>
+    <div class="metrics">
+      ${cats.map((c,i) => `<div class="metric"><div class="metric-label">${c}</div><div class="metric-value" style="color:${colors[i]}">${fmt$(catMap[c]?.revenue||0)}</div><div class="metric-sub">${fmtN(catMap[c]?.count||0)} jobs · ${total?((catMap[c]?.revenue||0)/total*100).toFixed(1):0}%</div></div>`).join('')}
+      <div class="metric"><div class="metric-label">Grand Total (KPI 10)</div><div class="metric-value orange">${fmt$(total)}</div><div class="metric-sub">${fmtN(FILTERED.length)} jobs</div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Revenue by category (KPI 10)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="c-cat-rev" role="img" aria-label="Revenue by category"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Job count by category</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="c-cat-cnt" role="img" aria-label="Job count by category"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top services (KPI 11)</div>
+      <div class="card-sub">Individual service types performed</div>
+      <div class="chart-wrap" style="height:${Math.max(240, topSvcs.length*36+40)}px"><canvas id="c-svcs" role="img" aria-label="Top services horizontal bar"></canvas></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Payment methods</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Method</th><th>Count</th><th>Share</th></tr></thead>
+          <tbody>${pays.map(([m,c])=>`<tr><td>${m}</td><td>${fmtN(c)}</td><td>${(c/totalPay*100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Category summary</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Category</th><th>Jobs</th><th>Revenue</th><th>Avg</th></tr></thead>
+          <tbody>${cats.map((c,i)=>`<tr><td><span class="badge badge-${c.toLowerCase().replace(' ','-')}">${c}</span></td><td>${fmtN(catMap[c]?.count||0)}</td><td>${fmt$(catMap[c]?.revenue||0)}</td><td>${fmt$((catMap[c]?.revenue||0)/(catMap[c]?.count||1))}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+
+  makeChart('c-cat-rev','bar',{labels:cats,datasets:[{data:cats.map(c=>catMap[c]?.revenue||0),backgroundColor:colors,borderWidth:0}]},{scales:{y:{ticks:{callback:v=>fmtK(v)}},x:{grid:{display:false}}}});
+  makeChart('c-cat-cnt','bar',{labels:cats,datasets:[{data:cats.map(c=>catMap[c]?.count||0),backgroundColor:colors.map(c=>c+'88'),borderColor:colors,borderWidth:1}]},{scales:{y:{ticks:{callback:v=>fmtN(v)}},x:{grid:{display:false}}}});
+  makeChart('c-svcs','bar',{
+    labels:topSvcs.map(([s])=>s),
+    datasets:[{data:topSvcs.map(([,d])=>d.count),backgroundColor:ORANGE+'BB',borderColor:ORANGE,borderWidth:1}]
+  },{indexAxis:'y',scales:{x:{grid:{color:'rgba(0,0,0,0.05)'}},y:{grid:{display:false}}}});
+}
+
+function renderActivity() {
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayMap = {Sun:{c:0,r:0},Mon:{c:0,r:0},Tue:{c:0,r:0},Wed:{c:0,r:0},Thu:{c:0,r:0},Fri:{c:0,r:0},Sat:{c:0,r:0}};
+  FILTERED.forEach(r => { if(r.dow!==null){const d=days[r.dow];dayMap[d].c++;dayMap[d].r+=r.total;}});
+
+  const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const moMap = {};
+  mNames.forEach(m => moMap[m]={c:0,r:0});
+  FILTERED.forEach(r => { if(r.month){const m=mNames[r.month-1];moMap[m].c++;moMap[m].r+=r.total;}});
+
+  const qMap = {Q1:{c:0,r:0},Q2:{c:0,r:0},Q3:{c:0,r:0},Q4:{c:0,r:0}};
+  FILTERED.forEach(r => { if(r.quarter){const q='Q'+r.quarter;qMap[q].c++;qMap[q].r+=r.total;}});
+
+  const busyDay = Object.entries(dayMap).sort((a,b)=>b[1].c-a[1].c)[0];
+  const busyMo = Object.entries(moMap).sort((a,b)=>b[1].c-a[1].c)[0];
+  const slowMo = Object.entries(moMap).sort((a,b)=>a[1].c-b[1].c)[0];
+  const busyQ = Object.entries(qMap).sort((a,b)=>b[1].c-a[1].c)[0];
+
+  const qByYr = {};
+  FILTERED.forEach(r => {
+    if(!r.year||!r.quarter) return;
+    const k = `${r.year} Q${r.quarter}`;
+    if(!qByYr[k]) qByYr[k]={c:0,r:0};
+    qByYr[k].c++;qByYr[k].r+=r.total;
+  });
+  const qKeys = Object.keys(qByYr).sort().slice(-16);
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Activity Patterns</div><div class="section-desc">KPIs 12–14: Busiest days, months & quarters</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Busiest day (KPI 12)</div><div class="metric-value orange">${busyDay[0]}</div><div class="metric-sub">${fmtN(busyDay[1].c)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Busiest month (KPI 13)</div><div class="metric-value">${busyMo[0]}</div><div class="metric-sub">${fmtN(busyMo[1].c)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Busiest quarter (KPI 14)</div><div class="metric-value">${busyQ[0]}</div><div class="metric-sub">${fmtN(busyQ[1].c)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Slowest month</div><div class="metric-value">${slowMo[0]}</div><div class="metric-sub">${fmtN(slowMo[1].c)} jobs</div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Jobs by day of week (KPI 12)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="c-dow" role="img" aria-label="Jobs by day of week"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Jobs by month (KPI 13)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="c-month" role="img" aria-label="Jobs by month"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Quarterly revenue trend (KPI 14)</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="c-qtr" role="img" aria-label="Quarterly revenue"></canvas></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Quarter breakdown</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="c-q-pie" role="img" aria-label="Jobs by quarter"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Revenue by quarter</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Quarter</th><th>Jobs</th><th>Revenue</th><th>Avg/job</th></tr></thead>
+          <tbody>${Object.entries(qMap).map(([q,d])=>`<tr><td><strong>${q}</strong></td><td>${fmtN(d.c)}</td><td>${fmt$(d.r)}</td><td>${fmt$(d.c?d.r/d.c:0)}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+
+  const orderedDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  makeChart('c-dow','bar',{
+    labels:orderedDays,
+    datasets:[{data:orderedDays.map(d=>dayMap[d].c),backgroundColor:orderedDays.map(d=>d===busyDay[0]?ORANGE:ORANGE+'66'),borderWidth:0}]
+  },{scales:{y:{ticks:{callback:v=>fmtN(v)}},x:{grid:{display:false}}}});
+
+  makeChart('c-month','bar',{
+    labels:mNames,
+    datasets:[{data:mNames.map(m=>moMap[m].c),backgroundColor:mNames.map(m=>m===busyMo[0]?ORANGE:ORANGE+'66'),borderWidth:0}]
+  },{scales:{y:{ticks:{callback:v=>fmtN(v)}},x:{grid:{display:false}}}});
+
+  makeChart('c-qtr','bar',{
+    labels:qKeys,
+    datasets:[{data:qKeys.map(k=>qByYr[k].r),backgroundColor:qKeys.map(k=>k.includes(busyQ[0])?ORANGE:ORANGE+'77'),borderWidth:0}]
+  },{scales:{y:{ticks:{callback:v=>fmtK(v)}},x:{grid:{display:false},ticks:{maxRotation:45,maxTicksLimit:12}}}});
+
+  makeChart('c-q-pie','doughnut',{
+    labels:['Q1','Q2','Q3','Q4'],
+    datasets:[{data:['Q1','Q2','Q3','Q4'].map(q=>qMap[q].c),backgroundColor:[BLUE,GREEN,ORANGE,AMBER],borderWidth:0}]
+  },{cutout:'55%'});
+}
+
+function renderGeography() {
+  const cityMap = groupBy(FILTERED,'city','total');
+  const zipMap = groupBy(FILTERED,'zip','total');
+  const countyMap = groupBy(FILTERED,'county','total');
+  const stateMap = groupBy(FILTERED,'state','total');
+
+  const topCities = Object.entries(cityMap).filter(([c])=>c).sort((a,b)=>b[1].count-a[1].count).slice(0,15);
+  const topZips = Object.entries(zipMap).filter(([z])=>z&&z.length===5).sort((a,b)=>b[1].count-a[1].count).slice(0,15);
+  const topCounties = Object.entries(countyMap).filter(([c])=>c).sort((a,b)=>b[1].count-a[1].count).slice(0,15);
+  const states = Object.entries(stateMap).filter(([s])=>s).sort((a,b)=>b[1].count-a[1].count);
+  const totalJobs = FILTERED.length;
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Geographic Coverage</div><div class="section-desc">KPIs 15–18: Jobs by zip, city, county & state</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">States (KPI 18)</div><div class="metric-value orange">${states.length}</div><div class="metric-sub">${states.map(([s])=>s).join(' · ')}</div></div>
+      <div class="metric"><div class="metric-label">Counties (KPI 17)</div><div class="metric-value">${Object.keys(countyMap).filter(c=>c).length}</div><div class="metric-sub">Across NJ & NY</div></div>
+      <div class="metric"><div class="metric-label">Cities (KPI 16)</div><div class="metric-value">${Object.keys(cityMap).filter(c=>c).length}</div><div class="metric-sub">Unique towns</div></div>
+      <div class="metric"><div class="metric-label">Zip codes (KPI 15)</div><div class="metric-value">${Object.keys(zipMap).filter(z=>z&&z.length===5).length}</div><div class="metric-sub">Active zips</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Jobs by state (KPI 18)</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>State</th><th>Jobs</th><th>Revenue</th><th>Avg/job</th><th>Share</th><th></th></tr></thead>
+        <tbody>${states.map(([s,d])=>`<tr>
+          <td><strong>${s}</strong></td><td>${fmtN(d.count)}</td><td>${fmt$(d.revenue)}</td><td>${fmt$(d.revenue/d.count)}</td>
+          <td>${(d.count/totalJobs*100).toFixed(1)}%</td>
+          <td><div class="geo-bar-wrap"><div class="geo-bar" style="width:${Math.min(80,d.count/totalJobs*120)}px"></div></div></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Top 15 cities (KPI 16)</div>
+        <div class="chart-wrap" style="height:${15*30+40}px"><canvas id="c-city" role="img" aria-label="Top cities by jobs"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Top 15 counties (KPI 17)</div>
+        <div class="chart-wrap" style="height:${15*30+40}px"><canvas id="c-county" role="img" aria-label="Top counties by jobs"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top 15 zip codes (KPI 15)</div>
+      <div class="chart-wrap" style="height:${15*32+40}px"><canvas id="c-zip" role="img" aria-label="Top zip codes by jobs"></canvas></div>
+    </div>`;
+
+  makeChart('c-city','bar',{labels:topCities.map(([c])=>c),datasets:[{data:topCities.map(([,d])=>d.count),backgroundColor:ORANGE+'BB',borderColor:ORANGE,borderWidth:1}]},{indexAxis:'y',scales:{x:{grid:{color:'rgba(0,0,0,0.05)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}});
+  makeChart('c-county','bar',{labels:topCounties.map(([c])=>c),datasets:[{data:topCounties.map(([,d])=>d.count),backgroundColor:BLUE+'BB',borderColor:BLUE,borderWidth:1}]},{indexAxis:'y',scales:{x:{grid:{color:'rgba(0,0,0,0.05)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}});
+  makeChart('c-zip','bar',{labels:topZips.map(([z])=>z),datasets:[{data:topZips.map(([,d])=>d.count),backgroundColor:GREEN+'BB',borderColor:GREEN,borderWidth:1}]},{indexAxis:'y',scales:{x:{grid:{color:'rgba(0,0,0,0.05)'}},y:{grid:{display:false},ticks:{font:{size:10}}}}});
+}
+
+function renderCustomers() {
+  const custMap = {};
+  ALL_DATA.filter(r=>!r.cancelled&&r.total>0).forEach(r => {
+    const k = r.phone || r.name;
+    if(!k) return;
+    if(!custMap[k]) custMap[k] = {name:r.name,phone:r.phone,email:r.email,city:r.city,visits:0,revenue:0,dates:[]};
+    custMap[k].visits++;
+    custMap[k].revenue += r.total;
+    if(r.date) custMap[k].dates.push(r.date);
+  });
+
+  const today = new Date();
+  const INACTIVE_DAYS = 180;
+  const custs = Object.values(custMap).map(c => {
+    const sorted = c.dates.sort((a,b)=>a-b);
+    const last = sorted[sorted.length-1];
+    const days = last ? Math.round((today-last)/86400000) : 9999;
+    return {...c, firstVisit:sorted[0], lastVisit:last, daysSince:days, active:days<=INACTIVE_DAYS};
+  });
+
+  const repeat = custs.filter(c=>c.visits>1);
+  const inactive = custs.filter(c=>!c.active);
+  const active = custs.filter(c=>c.active);
+  const topCustomers = custs.sort((a,b)=>b.revenue-a.revenue).slice(0,20);
+
+  document.getElementById('app-content').innerHTML = `
+    <div class="section-header"><div class="section-title">Customer Intelligence</div><div class="section-desc">Repeat, active & inactive customers</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Total customers</div><div class="metric-value orange">${fmtN(custs.length)}</div></div>
+      <div class="metric"><div class="metric-label">Repeat customers</div><div class="metric-value">${fmtN(repeat.length)}</div><div class="metric-sub">${(repeat.length/custs.length*100).toFixed(1)}% of total</div></div>
+      <div class="metric"><div class="metric-label">Active (< 6mo)</div><div class="metric-value" style="color:${GREEN}">${fmtN(active.length)}</div></div>
+      <div class="metric"><div class="metric-label">Inactive (> 6mo)</div><div class="metric-value" style="color:${RED}">${fmtN(inactive.length)}</div></div>
+      <div class="metric"><div class="metric-label">Avg visits</div><div class="metric-value">${(custs.reduce((s,c)=>s+c.visits,0)/custs.length).toFixed(1)}</div></div>
+      <div class="metric"><div class="metric-label">Avg lifetime value</div><div class="metric-value">${fmt$(custs.reduce((s,c)=>s+c.revenue,0)/custs.length)}</div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-title">Customer status</div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:${GREEN}"></span>Active</span>
+          <span class="legend-item"><span class="legend-dot" style="background:${RED}"></span>Inactive</span>
+        </div>
+        <div class="chart-wrap" style="height:180px"><canvas id="c-cust-status" role="img" aria-label="Active vs inactive customers"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Visit frequency</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="c-visits" role="img" aria-label="Customer visit frequency"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top 20 customers by revenue</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>#</th><th>Name</th><th>City</th><th>Visits</th><th>Revenue</th><th>Last Visit</th><th>Status</th></tr></thead>
+        <tbody>${topCustomers.map((c,i)=>`<tr>
+          <td class="rank">${i+1}</td>
+          <td>${c.name||'—'}</td>
+          <td>${c.city||'—'}</td>
+          <td>${c.visits}</td>
+          <td>${fmt$(c.revenue)}</td>
+          <td>${c.lastVisit?c.lastVisit.toLocaleDateString():'—'}</td>
+          <td><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${c.active?'#EAF3DE':'#FCEBEB'};color:${c.active?GREEN:RED}">${c.active?'Active':'Inactive'}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+
+  makeChart('c-cust-status','doughnut',{
+    labels:['Active','Inactive'],
+    datasets:[{data:[active.length,inactive.length],backgroundColor:[GREEN,RED],borderWidth:0}]
+  },{cutout:'60%'});
+
+  const visitBuckets = {'1 visit':0,'2-3':0,'4-5':0,'6-10':0,'10+':0};
+  custs.forEach(c => {
+    if(c.visits===1) visitBuckets['1 visit']++;
+    else if(c.visits<=3) visitBuckets['2-3']++;
+    else if(c.visits<=5) visitBuckets['4-5']++;
+    else if(c.visits<=10) visitBuckets['6-10']++;
+    else visitBuckets['10+']++;
+  });
+  makeChart('c-visits','bar',{
+    labels:Object.keys(visitBuckets),
+    datasets:[{data:Object.values(visitBuckets),backgroundColor:[GRAY+'88',BLUE+'88',GREEN+'88',ORANGE+'88',ORANGE],borderWidth:0}]
+  },{scales:{y:{ticks:{callback:v=>fmtN(v)}},x:{grid:{display:false}}}});
+}
+
+loadData();
+</script>
+</body>
+</html>
