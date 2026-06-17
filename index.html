@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -190,16 +189,6 @@
       <div class="header-right">
         <select class="filter-select" id="year-filter" onchange="applyYearFilter()">
           <option value="all">All Years</option>
-          <option value="2026">2026</option>
-          <option value="2025">2025</option>
-          <option value="2024">2024</option>
-          <option value="2023">2023</option>
-          <option value="2022">2022</option>
-          <option value="2021">2021</option>
-          <option value="2020">2020</option>
-          <option value="2019">2019</option>
-          <option value="2018">2018</option>
-          <option value="2017">2017</option>
         </select>
       </div>
     </div>
@@ -336,6 +325,7 @@ async function loadData() {
 
     setProgress(100);
     FILTERED = [...ALL_DATA];
+    populateYearFilter();
     document.getElementById('last-sync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
     setTimeout(() => setProgress(0), 500);
     renderPage(currentPage);
@@ -350,6 +340,14 @@ function applyYearFilter() {
   const yr = document.getElementById('year-filter').value;
   FILTERED = yr === 'all' ? [...ALL_DATA] : ALL_DATA.filter(r => r.year === parseInt(yr));
   renderPage(currentPage);
+}
+
+function populateYearFilter() {
+  const sel = document.getElementById('year-filter');
+  const currentVal = sel.value;
+  const years = [...new Set(ALL_DATA.map(r => r.year).filter(y => y))].sort((a,b) => b - a);
+  sel.innerHTML = '<option value="all">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+  if (years.includes(parseInt(currentVal)) || currentVal === 'all') sel.value = currentVal;
 }
 
 function showPage(page, el) {
@@ -404,11 +402,15 @@ function renderOverview() {
   const total = FILTERED.reduce((s, r) => s + r.total, 0);
   const jobs = FILTERED.length;
   const avg = jobs ? total / jobs : 0;
-  const yr2026 = FILTERED.filter(r => r.year === 2026);
-  const ytd = yr2026.reduce((s, r) => s + r.total, 0);
+  const allYears = [...new Set(ALL_DATA.map(r => r.year).filter(y => y))];
+  const minYear = Math.min(...allYears);
+  const maxYear = Math.max(...allYears);
+  const currentYr = maxYear;
+  const yrCurrent = FILTERED.filter(r => r.year === currentYr);
+  const ytd = yrCurrent.reduce((s, r) => s + r.total, 0);
 
   const yoyMap = groupBy(ALL_DATA.filter(r => !r.cancelled), 'year', 'total');
-  const years = Object.keys(yoyMap).map(Number).filter(y => y >= 2017 && y <= 2026).sort();
+  const years = Object.keys(yoyMap).map(Number).filter(y => y >= minYear && y <= maxYear).sort();
   const bestYr = years.reduce((b, y) => yoyMap[y].revenue > (yoyMap[b]?.revenue||0) ? y : b, years[0]);
 
   document.getElementById('app-content').innerHTML = `
@@ -417,7 +419,7 @@ function renderOverview() {
       <div class="metric"><div class="metric-label">Total revenue</div><div class="metric-value orange">${fmt$(total)}</div><div class="metric-sub">All time</div></div>
       <div class="metric"><div class="metric-label">Total jobs</div><div class="metric-value">${fmtN(jobs)}</div><div class="metric-sub">Completed</div></div>
       <div class="metric"><div class="metric-label">Avg job value</div><div class="metric-value">${fmt$(avg)}</div><div class="metric-sub">Per service</div></div>
-      <div class="metric"><div class="metric-label">YTD 2026</div><div class="metric-value orange">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(yr2026.length)} jobs</div></div>
+      <div class="metric"><div class="metric-label">YTD ${currentYr}</div><div class="metric-value orange">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(yrCurrent.length)} jobs</div></div>
       <div class="metric"><div class="metric-label">Best year</div><div class="metric-value">${bestYr}</div><div class="metric-sub">${fmt$(yoyMap[bestYr]?.revenue||0)}</div></div>
       <div class="metric"><div class="metric-label">States served</div><div class="metric-value">${Object.keys(groupBy(FILTERED,'state','total')).filter(s=>s).length}</div><div class="metric-sub">NJ · NY · PA · CT</div></div>
     </div>
@@ -465,7 +467,10 @@ function renderOverview() {
 
 function renderRevenue() {
   const yoyMap = groupBy(ALL_DATA.filter(r => !r.cancelled && r.total > 0), 'year', 'total');
-  const years = Object.keys(yoyMap).map(Number).filter(y => y >= 2017 && y <= 2026).sort();
+  const allYearsRev = [...new Set(ALL_DATA.map(r => r.year).filter(y => y))];
+  const minYearRev = Math.min(...allYearsRev);
+  const maxYearRev = Math.max(...allYearsRev);
+  const years = Object.keys(yoyMap).map(Number).filter(y => y >= minYearRev && y <= maxYearRev).sort();
   
   const monthMap = {};
   FILTERED.forEach(r => {
@@ -478,15 +483,15 @@ function renderRevenue() {
   const months = Object.keys(monthMap).sort().slice(-24);
 
   const totalRev = FILTERED.reduce((s,r) => s+r.total, 0);
-  const ytd = FILTERED.filter(r => r.year === 2026).reduce((s,r)=>s+r.total,0);
+  const ytd = FILTERED.filter(r => r.year === maxYearRev).reduce((s,r)=>s+r.total,0);
   const peakYr = years.reduce((b,y) => yoyMap[y].revenue>(yoyMap[b]?.revenue||0)?y:b, years[0]);
   const peakMoEntry = Object.entries(monthMap).sort((a,b)=>b[1].revenue-a[1].revenue)[0];
 
   document.getElementById('app-content').innerHTML = `
     <div class="section-header"><div class="section-title">Revenue Analysis</div><div class="section-desc">KPIs 1–5: Historical, yearly, YOY, YTD & month-over-month</div></div>
     <div class="metrics">
-      <div class="metric"><div class="metric-label">Historical total (KPI 1)</div><div class="metric-value orange">${fmt$(totalRev)}</div><div class="metric-sub">Since 2017</div></div>
-      <div class="metric"><div class="metric-label">YTD 2026 (KPI 4)</div><div class="metric-value">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(FILTERED.filter(r=>r.year===2026).length)} jobs</div></div>
+      <div class="metric"><div class="metric-label">Historical total (KPI 1)</div><div class="metric-value orange">${fmt$(totalRev)}</div><div class="metric-sub">Since ${minYearRev}</div></div>
+      <div class="metric"><div class="metric-label">YTD ${maxYearRev} (KPI 4)</div><div class="metric-value">${fmt$(ytd)}</div><div class="metric-sub">${fmtN(FILTERED.filter(r=>r.year===maxYearRev).length)} jobs</div></div>
       <div class="metric"><div class="metric-label">Best year</div><div class="metric-value">${peakYr}</div><div class="metric-sub">${fmt$(yoyMap[peakYr]?.revenue||0)}</div></div>
       <div class="metric"><div class="metric-label">Best month</div><div class="metric-value">${peakMoEntry?peakMoEntry[0]:'—'}</div><div class="metric-sub">${peakMoEntry?fmt$(peakMoEntry[1].revenue):'—'}</div></div>
     </div>
