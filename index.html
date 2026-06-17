@@ -324,8 +324,11 @@ async function loadData() {
     })).filter(r => r.date && !isNaN(r.date) && !r.cancelled && r.total > 0);
 
     setProgress(100);
-    FILTERED = [...ALL_DATA];
+    const prevYearSelection = document.getElementById('year-filter').value;
     populateYearFilter();
+    const sel = document.getElementById('year-filter');
+    if ([...sel.options].some(o => o.value === prevYearSelection)) sel.value = prevYearSelection;
+    FILTERED = sel.value === 'all' ? [...ALL_DATA] : ALL_DATA.filter(r => r.year === parseInt(sel.value));
     document.getElementById('last-sync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
     setTimeout(() => setProgress(0), 500);
     renderPage(currentPage);
